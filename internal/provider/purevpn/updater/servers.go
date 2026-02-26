@@ -3,14 +3,13 @@ package updater
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/netip"
 	"sort"
-	"strings"
 
 	"github.com/qdm12/gluetun/internal/models"
 	"github.com/qdm12/gluetun/internal/provider/common"
 	"github.com/qdm12/gluetun/internal/publicip/api"
-	"github.com/qdm12/gluetun/internal/updater/openvpn"
 )
 
 func (u *Updater) FetchServers(ctx context.Context, minServers int) (
@@ -20,44 +19,30 @@ func (u *Updater) FetchServers(ctx context.Context, minServers int) (
 		return nil, fmt.Errorf("%w: %s", common.ErrIPFetcherUnsupported, u.ipFetcher.String())
 	}
 
-	const url = "https://d11a57lttb2ffq.cloudfront.net/heartbleed/router/Recommended-CA2.zip"
-	contents, err := u.unzipper.FetchAndExtract(ctx, url)
+	debURL, err := fetchDebURL(ctx, http.DefaultClient)
 	if err != nil {
-		return nil, err
-	} else if len(contents) < minServers {
-		return nil, fmt.Errorf("%w: %d and expected at least %d",
-			common.ErrNotEnoughServers, len(contents), minServers)
+		return nil, fmt.Errorf("fetching .deb URL: %w", err)
 	}
 
-	hts := make(hostToServer)
-
-	for fileName, content := range contents {
-		if !strings.HasSuffix(fileName, ".ovpn") {
-			continue
-		}
-
-		tcp, udp, err := openvpn.ExtractProto(content)
-		if err != nil {
-			// treat error as warning and go to next file
-			u.warner.Warn(err.Error() + " in " + fileName)
-			continue
-		}
-
-		host, warning, err := openvpn.ExtractHost(content)
-		if warning != "" {
-			u.warner.Warn(warning)
-		}
-
-		if err != nil {
-			// treat error as warning and go to next file
-			u.warner.Warn(err.Error() + " in " + fileName)
-			continue
-		}
-
-		hts.add(host, tcp, udp)
+	debContent, err := fetchURL(ctx, http.DefaultClient, debURL)
+	if err != nil {
+		return nil, fmt.Errorf("fetching PureVPN .deb file %q: %w", debURL, err)
 	}
 
-	if len(hts) < minServers {
+	asarContent, err := extractAsarFromDeb(debContent)
+	if err != nil {
+		return nil, fmt.Errorf("extracting app.asar from .deb: %w", err)
+	}
+
+	localDataContent, err := extractFileFromAsar(asarContent, localDataAsarPath)
+	if err != nil {
+		return nil, fmt.Errorf("extracting %q from app.asar: %w", localDataAsarPath, err)
+	}
+
+	hts, err := parseLocalData(localDataContent)
+	if err != nil {
+		return nil, fmt.Errorf("parsing %q: %w", localDataAsarPath, err)
+	} else if len(hts) < minServers {
 		return nil, fmt.Errorf("%w: %d and expected at least %d",
 			common.ErrNotEnoughServers, len(hts), minServers)
 	}
@@ -100,13 +85,15 @@ func (u *Updater) FetchServers(ctx context.Context, minServers int) (
 		if servers[i].Country == "" {
 			servers[i].Country = ipsInfo[i].Country
 		}
+
+		countryMatchesGeolocation := shouldUseGeolocation(parsedCountry, ipsInfo[i].Country)
+
 		servers[i].City = parsedCity
-		if servers[i].City == "" {
+		if servers[i].City == "" && countryMatchesGeolocation {
 			servers[i].City = ipsInfo[i].City
 		}
 
-		if (parsedCountry == "" ||
-			comparePlaceNames(parsedCountry, ipsInfo[i].Country)) &&
+		if countryMatchesGeolocation &&
 			(parsedCity == "" ||
 				comparePlaceNames(parsedCity, ipsInfo[i].City)) {
 			servers[i].Region = ipsInfo[i].Region
@@ -116,4 +103,8 @@ func (u *Updater) FetchServers(ctx context.Context, minServers int) (
 	sort.Sort(models.SortableServers(servers))
 
 	return servers, nil
+}
+
+func shouldUseGeolocation(parsedCountry, geolocationCountry string) (use bool) {
+	return parsedCountry == "" || comparePlaceNames(parsedCountry, geolocationCountry)
 }

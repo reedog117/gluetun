@@ -5,6 +5,7 @@ import (
 	"math/rand"
 
 	"github.com/qdm12/gluetun/internal/configuration/settings"
+	"github.com/qdm12/gluetun/internal/constants"
 	"github.com/qdm12/gluetun/internal/constants/vpn"
 	"github.com/qdm12/gluetun/internal/models"
 )
@@ -61,10 +62,18 @@ func GetConnection(provider string,
 				hostname = server.OvpnX509
 			}
 
+			portForServer := port
+			customOpenVPNPortSet := selection.OpenVPN.CustomPort != nil &&
+				*selection.OpenVPN.CustomPort != 0
+			if !customOpenVPNPortSet && selection.VPN == vpn.OpenVPN {
+				portForServer = getPortForServer(server, protocol,
+					defaults.OpenVPNTCPPort, defaults.OpenVPNUDPPort)
+			}
+
 			connection := models.Connection{
 				Type:        selection.VPN,
 				IP:          ip,
-				Port:        port,
+				Port:        portForServer,
 				Protocol:    protocol,
 				Hostname:    hostname,
 				ServerName:  server.ServerName,
@@ -76,4 +85,21 @@ func GetConnection(provider string,
 	}
 
 	return pickConnection(connections, selection, randSource)
+}
+
+func getPortForServer(server models.Server, protocol string, defaultTCPPort, defaultUDPPort uint16) (port uint16) {
+	switch protocol {
+	case constants.TCP:
+		if len(server.TCPPorts) > 0 && server.TCPPorts[0] != 0 {
+			return server.TCPPorts[0]
+		}
+		return defaultTCPPort
+	case constants.UDP:
+		if len(server.UDPPorts) > 0 && server.UDPPorts[0] != 0 {
+			return server.UDPPorts[0]
+		}
+		return defaultUDPPort
+	default:
+		return 0
+	}
 }

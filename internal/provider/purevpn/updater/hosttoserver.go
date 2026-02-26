@@ -9,7 +9,7 @@ import (
 
 type hostToServer map[string]models.Server
 
-func (hts hostToServer) add(host string, tcp, udp bool) {
+func (hts hostToServer) add(host string, tcp, udp bool, port uint16) {
 	server, ok := hts[host]
 	if !ok {
 		server.VPN = vpn.OpenVPN
@@ -17,11 +17,26 @@ func (hts hostToServer) add(host string, tcp, udp bool) {
 	}
 	if tcp {
 		server.TCP = true
+		if port != 0 {
+			server.TCPPorts = appendPortIfMissing(server.TCPPorts, port)
+		}
 	}
 	if udp {
 		server.UDP = true
+		if port != 0 {
+			server.UDPPorts = appendPortIfMissing(server.UDPPorts, port)
+		}
 	}
 	hts[host] = server
+}
+
+func appendPortIfMissing(ports []uint16, port uint16) []uint16 {
+	for _, existingPort := range ports {
+		if existingPort == port {
+			return ports
+		}
+	}
+	return append(ports, port)
 }
 
 func (hts hostToServer) toHostsSlice() (hosts []string) {

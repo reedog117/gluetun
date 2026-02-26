@@ -24,6 +24,8 @@ type Server struct {
 	Hostname    string       `json:"hostname,omitempty"`
 	TCP         bool         `json:"tcp,omitempty"`
 	UDP         bool         `json:"udp,omitempty"`
+	TCPPorts    []uint16     `json:"tcp_ports,omitempty"`
+	UDPPorts    []uint16     `json:"udp_ports,omitempty"`
 	OvpnX509    string       `json:"x509,omitempty"`
 	RetroLoc    string       `json:"retroloc,omitempty"` // TODO remove in v4
 	MultiHop    bool         `json:"multihop,omitempty"`
