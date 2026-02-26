@@ -90,16 +90,25 @@ func GetConnection(provider string,
 func getPortForServer(server models.Server, protocol string, defaultTCPPort, defaultUDPPort uint16) (port uint16) {
 	switch protocol {
 	case constants.TCP:
-		if len(server.TCPPorts) > 0 && server.TCPPorts[0] != 0 {
-			return server.TCPPorts[0]
-		}
-		return defaultTCPPort
+		ports := make([]uint16, 0, len(server.TCPPorts)+3)
+		ports = append(ports, server.TCPPorts...)
+		ports = append(ports, defaultTCPPort, 443, 1194)
+		return firstNonZeroPort(ports)
 	case constants.UDP:
-		if len(server.UDPPorts) > 0 && server.UDPPorts[0] != 0 {
-			return server.UDPPorts[0]
-		}
-		return defaultUDPPort
+		ports := make([]uint16, 0, len(server.UDPPorts)+3)
+		ports = append(ports, server.UDPPorts...)
+		ports = append(ports, defaultUDPPort, 1194, 53)
+		return firstNonZeroPort(ports)
 	default:
 		return 0
 	}
+}
+
+func firstNonZeroPort(ports []uint16) (port uint16) {
+	for _, port := range ports {
+		if port != 0 {
+			return port
+		}
+	}
+	return 0
 }

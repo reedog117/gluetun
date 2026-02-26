@@ -278,3 +278,55 @@ func Test_GetConnection(t *testing.T) {
 		})
 	}
 }
+
+func Test_getPortForServer(t *testing.T) {
+	t.Parallel()
+
+	testCases := map[string]struct {
+		server         models.Server
+		protocol       string
+		defaultTCPPort uint16
+		defaultUDPPort uint16
+		expectedPort   uint16
+	}{
+		"TCP prefers extracted port over fallback ports": {
+			server:         models.Server{TCPPorts: []uint16{80, 443}},
+			protocol:       constants.TCP,
+			defaultTCPPort: 443,
+			defaultUDPPort: 15021,
+			expectedPort:   80,
+		},
+		"TCP falls back to configured default then 443 then 1194": {
+			server:         models.Server{},
+			protocol:       constants.TCP,
+			defaultTCPPort: 0,
+			defaultUDPPort: 15021,
+			expectedPort:   443,
+		},
+		"UDP prefers extracted port over fallback ports": {
+			server:         models.Server{UDPPorts: []uint16{15021, 1194}},
+			protocol:       constants.UDP,
+			defaultTCPPort: 443,
+			defaultUDPPort: 15021,
+			expectedPort:   15021,
+		},
+		"UDP falls back to configured default then 1194 then 53": {
+			server:         models.Server{},
+			protocol:       constants.UDP,
+			defaultTCPPort: 443,
+			defaultUDPPort: 0,
+			expectedPort:   1194,
+		},
+	}
+
+	for name, testCase := range testCases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			port := getPortForServer(testCase.server, testCase.protocol,
+				testCase.defaultTCPPort, testCase.defaultUDPPort)
+
+			assert.Equal(t, testCase.expectedPort, port)
+		})
+	}
+}

@@ -1,6 +1,7 @@
 package updater
 
 import (
+	"net/netip"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -44,4 +45,35 @@ func Test_parseLocalData_noHosts(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no TCP/UDP protocol blocks")
+}
+
+func Test_parseLocalDataFallbackIPs(t *testing.T) {
+	t.Parallel()
+
+	content := []byte(`"use strict";module.exports={body:{
+		data_centers:[
+			{id:10,ping_ip_address:"1.2.3.4"},
+			{id:11,ping_ip_address:"5.6.7.8"}
+		],
+		countries:[{
+			id:1,
+			data_centers:[{id:10},{id:11}],
+			protocols:[
+				{protocol:"TCP",dns:[{name:"aa2-tcp.ptoserver.com",port_number:80}]},
+				{protocol:"UDP",dns:[{name:"aa2-udp.ptoserver.com",port_number:15021}]}
+			]
+		}]
+	}};`)
+
+	hostToFallbackIPs := parseLocalDataFallbackIPs(content)
+	require.NotEmpty(t, hostToFallbackIPs)
+
+	assert.Equal(t, []netip.Addr{
+		netip.MustParseAddr("1.2.3.4"),
+		netip.MustParseAddr("5.6.7.8"),
+	}, hostToFallbackIPs["aa2-tcp.ptoserver.com"])
+	assert.Equal(t, []netip.Addr{
+		netip.MustParseAddr("1.2.3.4"),
+		netip.MustParseAddr("5.6.7.8"),
+	}, hostToFallbackIPs["aa2-udp.ptoserver.com"])
 }

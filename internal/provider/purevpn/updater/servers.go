@@ -10,6 +10,7 @@ import (
 	"github.com/qdm12/gluetun/internal/models"
 	"github.com/qdm12/gluetun/internal/provider/common"
 	"github.com/qdm12/gluetun/internal/publicip/api"
+	"github.com/qdm12/gluetun/internal/updater/resolver"
 )
 
 func (u *Updater) FetchServers(ctx context.Context, minServers int) (
@@ -46,20 +47,21 @@ func (u *Updater) FetchServers(ctx context.Context, minServers int) (
 		return nil, fmt.Errorf("%w: %d and expected at least %d",
 			common.ErrNotEnoughServers, len(hts), minServers)
 	}
+	hostToFallbackIPs := parseLocalDataFallbackIPs(localDataContent)
 
 	hosts := hts.toHostsSlice()
 	resolveSettings := parallelResolverSettings(hosts)
-	hostToIPs, warnings, err := u.parallelResolver.Resolve(ctx, resolveSettings)
-	for _, warning := range warnings {
-		u.warner.Warn(warning)
-	}
+	hostToIPs, warnings, err := resolveWithMultipleResolvers(ctx, u.parallelResolver, resolveSettings)
+	warnAll(u.warner, warnings)
 	if err != nil {
 		return nil, err
 	}
 
+	applyFallbackIPs(hostToIPs, hostToFallbackIPs, hosts)
+
 	if len(hostToIPs) < minServers {
 		return nil, fmt.Errorf("%w: %d and expected at least %d",
-			common.ErrNotEnoughServers, len(servers), minServers)
+			common.ErrNotEnoughServers, len(hostToIPs), minServers)
 	}
 
 	hts.adaptWithIPs(hostToIPs)
@@ -107,4 +109,68 @@ func (u *Updater) FetchServers(ctx context.Context, minServers int) (
 
 func shouldUseGeolocation(parsedCountry, geolocationCountry string) (use bool) {
 	return parsedCountry == "" || comparePlaceNames(parsedCountry, geolocationCountry)
+}
+
+func resolveWithMultipleResolvers(ctx context.Context, primary common.ParallelResolver,
+	settings resolver.ParallelSettings,
+) (hostToIPs map[string][]netip.Addr, warnings []string, err error) {
+	hostToIPs = make(map[string][]netip.Addr, len(settings.Hosts))
+
+	mergeResult := func(newHostToIPs map[string][]netip.Addr) {
+		for host, ips := range newHostToIPs {
+			existing := hostToIPs[host]
+			for _, ip := range ips {
+				existing = appendIPIfMissing(existing, ip)
+			}
+			hostToIPs[host] = existing
+		}
+	}
+
+	primaryHostToIPs, primaryWarnings, primaryErr := primary.Resolve(ctx, settings)
+	warnings = append(warnings, primaryWarnings...)
+	if primaryErr == nil {
+		mergeResult(primaryHostToIPs)
+	} else {
+		warnings = append(warnings, primaryErr.Error())
+	}
+
+	// Try multiple DNS resolvers to recover hosts that are flaky or resolver-specific.
+	for _, dnsAddress := range []string{"1.1.1.1", "8.8.8.8", "9.9.9.9"} {
+		parallelResolver := resolver.NewParallelResolver(dnsAddress)
+		hostToIPsCandidate, candidateWarnings, candidateErr := parallelResolver.Resolve(ctx, settings)
+		warnings = append(warnings, candidateWarnings...)
+		if candidateErr != nil {
+			warnings = append(warnings, candidateErr.Error())
+			continue
+		}
+		mergeResult(hostToIPsCandidate)
+	}
+
+	if len(hostToIPs) == 0 {
+		return nil, warnings, fmt.Errorf("%w", common.ErrNotEnoughServers)
+	}
+
+	return hostToIPs, warnings, nil
+}
+
+func applyFallbackIPs(hostToIPs map[string][]netip.Addr, hostToFallbackIPs map[string][]netip.Addr, hosts []string) {
+	if len(hostToFallbackIPs) == 0 {
+		return
+	}
+	for _, host := range hosts {
+		if len(hostToIPs[host]) > 0 {
+			continue
+		}
+		fallbackIPs := hostToFallbackIPs[host]
+		if len(fallbackIPs) == 0 {
+			continue
+		}
+		hostToIPs[host] = append([]netip.Addr(nil), fallbackIPs...)
+	}
+}
+
+func warnAll(warner common.Warner, warnings []string) {
+	for _, warning := range warnings {
+		warner.Warn(warning)
+	}
 }
