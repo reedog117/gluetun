@@ -115,3 +115,13 @@ func Test_parseInventoryConfigurationVersions(t *testing.T) {
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, []string{"2.0", "14.0"}, versions)
 }
+
+func Test_hasP2PTag(t *testing.T) {
+	t.Parallel()
+
+	assert.True(t, hasP2PTag([]string{"p2p"}))
+	assert.True(t, hasP2PTag([]string{"TAG_P2P"}))
+	assert.True(t, hasP2PTag([]string{"tag-p2p"}))
+	assert.True(t, hasP2PTag([]string{"tag p2p"}))
+	assert.False(t, hasP2PTag([]string{"TAG_QR", "TAG_OVPN_OBF"}))
+}

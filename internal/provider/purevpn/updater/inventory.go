@@ -222,9 +222,17 @@ func parseInventoryConfigurationVersions(content []byte) (versions []string, err
 }
 
 func hasP2PTag(tags []string) (p2p bool) {
+	separatorNormalizer := strings.NewReplacer("-", "_", " ", "_")
 	for _, tag := range tags {
-		if strings.EqualFold(strings.TrimSpace(tag), "p2p") {
-			return true
+		normalized := strings.ToLower(strings.TrimSpace(tag))
+		if normalized == "" {
+			continue
+		}
+		normalized = separatorNormalizer.Replace(normalized)
+		for _, token := range strings.Split(normalized, "_") {
+			if token == "p2p" {
+				return true
+			}
 		}
 	}
 	return false

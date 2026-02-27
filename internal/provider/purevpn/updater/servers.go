@@ -6,20 +6,16 @@ import (
 	"net/http"
 	"net/netip"
 	"sort"
+	"strings"
 
 	"github.com/qdm12/gluetun/internal/models"
 	"github.com/qdm12/gluetun/internal/provider/common"
-	"github.com/qdm12/gluetun/internal/publicip/api"
 	"github.com/qdm12/gluetun/internal/updater/resolver"
 )
 
 func (u *Updater) FetchServers(ctx context.Context, minServers int) (
 	servers []models.Server, err error,
 ) {
-	if !u.ipFetcher.CanFetchAnyIP() {
-		return nil, fmt.Errorf("%w: %s", common.ErrIPFetcherUnsupported, u.ipFetcher.String())
-	}
-
 	debURL, err := fetchDebURL(ctx, http.DefaultClient)
 	if err != nil {
 		return nil, fmt.Errorf("fetching .deb URL: %w", err)
@@ -73,6 +69,22 @@ func (u *Updater) FetchServers(ctx context.Context, minServers int) (
 	if err != nil {
 		return nil, fmt.Errorf("parsing inventory JSON from %q: %w", inventoryURL, err)
 	}
+
+	localDataContent, err := extractFileFromAsar(asarContent, localDataAsarPath)
+	if err != nil {
+		u.warner.Warn(fmt.Sprintf("extracting app-bundled local data from app.asar: %v", err))
+	} else {
+		localHTS, parseErr := parseLocalData(localDataContent)
+		if parseErr != nil {
+			u.warner.Warn(fmt.Sprintf("parsing app-bundled local data: %v", parseErr))
+		} else {
+			mergeHostToServer(hts, localHTS)
+		}
+
+		localFallbackIPs := parseLocalDataFallbackIPs(localDataContent)
+		hostToFallbackIPs = mergeHostToFallbackIPs(hostToFallbackIPs, localFallbackIPs)
+	}
+
 	if len(hts) < minServers {
 		return nil, fmt.Errorf("%w: %d and expected at least %d",
 			common.ErrNotEnoughServers, len(hts), minServers)
@@ -97,47 +109,117 @@ func (u *Updater) FetchServers(ctx context.Context, minServers int) (
 
 	servers = hts.toServersSlice()
 
-	// Get public IP address information
-	ipsToGetInfo := make([]netip.Addr, len(servers))
 	for i := range servers {
-		ipsToGetInfo[i] = servers[i].IPs[0]
-	}
-	ipsInfo, err := api.FetchMultiInfo(ctx, u.ipFetcher, ipsToGetInfo)
-	if err != nil {
-		return nil, err
-	}
-
-	for i := range servers {
-		parsedCountry, parsedCity, warnings := parseHostname(servers[i].Hostname)
+		country, city, warnings := parseHostname(servers[i].Hostname)
 		for _, warning := range warnings {
 			u.warner.Warn(warning)
 		}
-		servers[i].Country = parsedCountry
-		if servers[i].Country == "" {
-			servers[i].Country = ipsInfo[i].Country
-		}
-
-		countryMatchesGeolocation := shouldUseGeolocation(parsedCountry, ipsInfo[i].Country)
-
-		servers[i].City = parsedCity
-		if servers[i].City == "" && countryMatchesGeolocation {
-			servers[i].City = ipsInfo[i].City
-		}
-
-		if countryMatchesGeolocation &&
-			(parsedCity == "" ||
-				comparePlaceNames(parsedCity, ipsInfo[i].City)) {
-			servers[i].Region = ipsInfo[i].Region
-		}
+		servers[i].Country = country
+		servers[i].City = city
 	}
+
+	enrichLocationBlanks(ctx, u.ipFetcher, u.warner, servers)
 
 	sort.Sort(models.SortableServers(servers))
 
 	return servers, nil
 }
 
-func shouldUseGeolocation(parsedCountry, geolocationCountry string) (use bool) {
-	return parsedCountry == "" || comparePlaceNames(parsedCountry, geolocationCountry)
+func enrichLocationBlanks(ctx context.Context, ipFetcher common.IPFetcher, warner common.Warner, servers []models.Server) {
+	if ipFetcher == nil || !ipFetcher.CanFetchAnyIP() {
+		return
+	}
+
+	for i := range servers {
+		if !needsGeolocationEnrichment(servers[i]) || len(servers[i].IPs) == 0 {
+			continue
+		}
+
+		result, err := ipFetcher.FetchInfo(ctx, servers[i].IPs[0])
+		if err != nil {
+			warner.Warn(fmt.Sprintf("fetching geolocation for %s (%s): %v",
+				servers[i].Hostname, servers[i].IPs[0], err))
+			continue
+		}
+
+		if !canApplyGeolocationCountry(servers[i].Country, result.Country) {
+			warner.Warn(fmt.Sprintf("discarding geolocation for %s (%s): country mismatch %q vs %q",
+				servers[i].Hostname, servers[i].IPs[0], servers[i].Country, result.Country))
+			continue
+		}
+
+		if servers[i].Country == "" {
+			servers[i].Country = strings.TrimSpace(result.Country)
+		}
+		if servers[i].Region == "" {
+			servers[i].Region = strings.TrimSpace(result.Region)
+		}
+		if servers[i].City == "" {
+			servers[i].City = strings.TrimSpace(result.City)
+		}
+	}
+}
+
+func needsGeolocationEnrichment(server models.Server) bool {
+	if strings.TrimSpace(server.Country) == "" {
+		return true
+	}
+	if strings.TrimSpace(server.City) != "" {
+		return false
+	}
+	return hostnameHasCityCode(server.Hostname)
+}
+
+func hostnameHasCityCode(hostname string) bool {
+	twoMinusIndex := strings.Index(hostname, "2-")
+	return twoMinusIndex > 2
+}
+
+func canApplyGeolocationCountry(inventoryCountry, geolocationCountry string) bool {
+	inventoryCountry = strings.TrimSpace(inventoryCountry)
+	geolocationCountry = strings.TrimSpace(geolocationCountry)
+	if inventoryCountry == "" || geolocationCountry == "" {
+		return true
+	}
+	return strings.EqualFold(inventoryCountry, geolocationCountry)
+}
+
+func mergeHostToServer(base, overlay hostToServer) {
+	for host, server := range overlay {
+		if server.TCP {
+			if len(server.TCPPorts) == 0 {
+				base.add(host, true, false, 0, false)
+			} else {
+				for _, port := range server.TCPPorts {
+					base.add(host, true, false, port, false)
+				}
+			}
+		}
+		if server.UDP {
+			if len(server.UDPPorts) == 0 {
+				base.add(host, false, true, 0, false)
+			} else {
+				for _, port := range server.UDPPorts {
+					base.add(host, false, true, port, false)
+				}
+			}
+		}
+	}
+}
+
+func mergeHostToFallbackIPs(base, overlay map[string][]netip.Addr) map[string][]netip.Addr {
+	if len(overlay) == 0 {
+		return base
+	}
+	if base == nil {
+		base = make(map[string][]netip.Addr)
+	}
+	for host, ips := range overlay {
+		for _, ip := range ips {
+			base[host] = appendIPIfMissing(base[host], ip)
+		}
+	}
+	return base
 }
 
 func resolveWithMultipleResolvers(ctx context.Context, primary common.ParallelResolver,
