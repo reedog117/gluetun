@@ -58,6 +58,7 @@ func Test_GetConnection(t *testing.T) {
 				{
 					VPN:      vpn.OpenVPN,
 					UDP:      true,
+					UDPPorts: []uint16{15021},
 					IPs:      []netip.Addr{netip.AddrFrom4([4]byte{1, 1, 1, 1})},
 					Hostname: "name",
 				},
@@ -70,7 +71,7 @@ func Test_GetConnection(t *testing.T) {
 				Type:     vpn.OpenVPN,
 				IP:       netip.AddrFrom4([4]byte{1, 1, 1, 1}),
 				Protocol: constants.UDP,
-				Port:     1194,
+				Port:     15021,
 				Hostname: "name",
 			},
 		},
@@ -79,6 +80,7 @@ func Test_GetConnection(t *testing.T) {
 				{
 					VPN:      vpn.OpenVPN,
 					UDP:      true,
+					UDPPorts: []uint16{15021},
 					IPs:      []netip.Addr{netip.AddrFrom4([4]byte{1, 1, 1, 1})},
 					Hostname: "hostname",
 					OvpnX509: "x509",
@@ -92,7 +94,7 @@ func Test_GetConnection(t *testing.T) {
 				Type:     vpn.OpenVPN,
 				IP:       netip.AddrFrom4([4]byte{1, 1, 1, 1}),
 				Protocol: constants.UDP,
-				Port:     1194,
+				Port:     15021,
 				Hostname: "x509",
 			},
 		},
@@ -173,6 +175,9 @@ func Test_GetConnection(t *testing.T) {
 				{
 					VPN: vpn.OpenVPN,
 					UDP: true,
+					UDPPorts: []uint16{
+						15021,
+					},
 					IPs: []netip.Addr{
 						netip.AddrFrom4([4]byte{1, 1, 1, 1}),
 						// All IPv6 is ignored
@@ -192,7 +197,7 @@ func Test_GetConnection(t *testing.T) {
 				Type:     vpn.OpenVPN,
 				IP:       netip.AddrFrom4([4]byte{1, 1, 1, 1}),
 				Protocol: constants.UDP,
-				Port:     1194,
+				Port:     15021,
 			},
 		},
 		"server with IPv4 and IPv6 and ipv6 supported": {
@@ -200,6 +205,9 @@ func Test_GetConnection(t *testing.T) {
 				{
 					VPN: vpn.OpenVPN,
 					UDP: true,
+					UDPPorts: []uint16{
+						15021,
+					},
 					IPs: []netip.Addr{
 						netip.IPv6Unspecified(),
 						netip.AddrFrom4([4]byte{1, 1, 1, 1}),
@@ -215,7 +223,7 @@ func Test_GetConnection(t *testing.T) {
 				Type:     vpn.OpenVPN,
 				IP:       netip.IPv6Unspecified(),
 				Protocol: constants.UDP,
-				Port:     1194,
+				Port:     15021,
 			},
 		},
 		"mixed servers": {
@@ -223,6 +231,7 @@ func Test_GetConnection(t *testing.T) {
 				{
 					VPN:      vpn.OpenVPN,
 					UDP:      true,
+					UDPPorts: []uint16{15021},
 					IPs:      []netip.Addr{netip.AddrFrom4([4]byte{1, 1, 1, 1})},
 					OvpnX509: "ovpnx509",
 				},
@@ -235,6 +244,7 @@ func Test_GetConnection(t *testing.T) {
 				{
 					VPN: vpn.OpenVPN,
 					UDP: true,
+					UDPPorts: []uint16{15021},
 					IPs: []netip.Addr{
 						netip.AddrFrom4([4]byte{3, 3, 3, 3}),
 						netip.AddrFrom16([16]byte{1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}), // ipv6 ignored
@@ -250,7 +260,7 @@ func Test_GetConnection(t *testing.T) {
 				Type:     vpn.OpenVPN,
 				IP:       netip.AddrFrom4([4]byte{1, 1, 1, 1}),
 				Protocol: constants.UDP,
-				Port:     1194,
+				Port:     15021,
 				Hostname: "ovpnx509",
 			},
 		},
@@ -279,7 +289,7 @@ func Test_GetConnection(t *testing.T) {
 	}
 }
 
-func Test_getPortForServer(t *testing.T) {
+func Test_getPortForServer_InventoryPorts(t *testing.T) {
 	t.Parallel()
 
 	testCases := map[string]struct {
@@ -289,33 +299,19 @@ func Test_getPortForServer(t *testing.T) {
 		defaultUDPPort uint16
 		expectedPort   uint16
 	}{
-		"TCP prefers extracted port over fallback ports": {
+		"TCP uses inventory port": {
 			server:         models.Server{TCPPorts: []uint16{80, 443}},
 			protocol:       constants.TCP,
 			defaultTCPPort: 443,
 			defaultUDPPort: 15021,
 			expectedPort:   80,
 		},
-		"TCP falls back to configured default then 443 then 1194": {
-			server:         models.Server{},
-			protocol:       constants.TCP,
-			defaultTCPPort: 0,
-			defaultUDPPort: 15021,
-			expectedPort:   443,
-		},
-		"UDP prefers extracted port over fallback ports": {
+		"UDP uses inventory port": {
 			server:         models.Server{UDPPorts: []uint16{15021, 1194}},
 			protocol:       constants.UDP,
 			defaultTCPPort: 443,
 			defaultUDPPort: 15021,
 			expectedPort:   15021,
-		},
-		"UDP falls back to configured default then 1194 then 53": {
-			server:         models.Server{},
-			protocol:       constants.UDP,
-			defaultTCPPort: 443,
-			defaultUDPPort: 0,
-			expectedPort:   1194,
 		},
 	}
 
