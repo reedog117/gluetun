@@ -48,16 +48,6 @@ func noServerFoundError(selection settings.ServerSelection) (err error) {
 		messageParts = append(messageParts, part)
 	}
 
-	switch len(selection.Regions) {
-	case 0:
-	case 1:
-		part := "region " + selection.Regions[0]
-		messageParts = append(messageParts, part)
-	default:
-		part := "regions " + commaJoin(selection.Regions)
-		messageParts = append(messageParts, part)
-	}
-
 	switch len(selection.Cities) {
 	case 0:
 	case 1:
@@ -141,8 +131,8 @@ func noServerFoundError(selection settings.ServerSelection) (err error) {
 		messageParts = append(messageParts, "port forwarding only")
 	}
 
-	if selection.PureVPNServerType != "" {
-		messageParts = append(messageParts, "purevpn server type "+selection.PureVPNServerType)
+	if len(selection.PureVPNServerTypes) > 0 {
+		messageParts = append(messageParts, "purevpn server types "+commaJoin(selection.PureVPNServerTypes))
 	}
 	if len(selection.PureVPNCountryCodes) > 0 {
 		messageParts = append(messageParts, "purevpn country codes "+commaJoin(selection.PureVPNCountryCodes))

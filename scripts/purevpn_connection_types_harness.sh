@@ -10,7 +10,7 @@ SERVERS_JSON="${ROOT_DIR}/internal/storage/servers.json"
 CONNECT_DEADLINE_SECONDS="${CONNECT_DEADLINE_SECONDS:-180}"
 # Reduce failed OpenVPN handshakes from 60s to 15s for this test harness only.
 FAILED_HANDSHAKE_TIMEOUT_SECONDS="${FAILED_HANDSHAKE_TIMEOUT_SECONDS:-15}"
-# Set to 1 to force PUREVPN_SERVER_TYPE filtering in Gluetun.
+# Set to 1 to force SERVER_TYPES filtering in Gluetun.
 USE_SERVER_TYPE_FILTER="${USE_SERVER_TYPE_FILTER:-0}"
 TEST_TYPES="${TEST_TYPES:-regular,portforwarding,quantumresistant,obfuscation}"
 TEST_PROTOCOLS="${TEST_PROTOCOLS:-udp,tcp}"
@@ -114,9 +114,9 @@ test_case() {
 
     hostname="$(choose_hostname "${server_type}" "${protocol}" || true)"
     if [ -z "${hostname}" ]; then
-      echo "[harness] no hostname found for ${server_type}/${protocol} in bundled servers"
-      echo "skip"
-      return 0
+      echo "[harness] no hostname found for ${server_type}/${protocol} in bundled servers (failing case)"
+      echo "0"
+      return 1
     fi
     attempt=$((attempt + 1))
 
@@ -129,7 +129,7 @@ test_case() {
 
     extra_type_env=""
     if [ "${USE_SERVER_TYPE_FILTER}" = "1" ]; then
-      extra_type_env="-e PUREVPN_SERVER_TYPE=${server_type}"
+      extra_type_env="-e SERVER_TYPES=${server_type}"
     fi
     # shellcheck disable=SC2086
     docker run -d --name "${name}" \
@@ -208,9 +208,6 @@ for server_type in $(echo "${TEST_TYPES}" | tr ',' ' '); do
     test_case "${server_type}" "${protocol}" 2>&1 | tee "${result_file}"
     result="$(tail -n 1 "${result_file}")"
     rm -f "${result_file}"
-    if [ "${result}" = "skip" ]; then
-      continue
-    fi
     tested_cases=$((tested_cases + 1))
     if [ "${result}" = "1" ]; then
       first_attempt_successes=$((first_attempt_successes + 1))

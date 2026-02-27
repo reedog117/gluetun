@@ -169,7 +169,7 @@ func Test_FilterServers(t *testing.T) {
 		},
 		"filter by purevpn regular server type": {
 			selection: settings.ServerSelection{
-				PureVPNServerType: "regular",
+				PureVPNServerTypes: []string{"regular"},
 			}.WithDefaults(providers.Purevpn),
 			servers: []models.Server{
 				{PortForward: true, VPN: vpn.OpenVPN, UDP: true},
@@ -183,7 +183,7 @@ func Test_FilterServers(t *testing.T) {
 		},
 		"filter by purevpn portforwarding server type": {
 			selection: settings.ServerSelection{
-				PureVPNServerType: "portforwarding",
+				PureVPNServerTypes: []string{"portforwarding"},
 			}.WithDefaults(providers.Purevpn),
 			servers: []models.Server{
 				{PortForward: false, VPN: vpn.OpenVPN, UDP: true},
@@ -197,7 +197,7 @@ func Test_FilterServers(t *testing.T) {
 		},
 		"filter by purevpn quantumresistant server type": {
 			selection: settings.ServerSelection{
-				PureVPNServerType: "quantumresistant",
+				PureVPNServerTypes: []string{"quantumresistant"},
 			}.WithDefaults(providers.Purevpn),
 			servers: []models.Server{
 				{PortForward: true, VPN: vpn.OpenVPN, UDP: true},
@@ -211,7 +211,7 @@ func Test_FilterServers(t *testing.T) {
 		},
 		"filter by purevpn obfuscation server type": {
 			selection: settings.ServerSelection{
-				PureVPNServerType: "obfuscation",
+				PureVPNServerTypes: []string{"obfuscation"},
 			}.WithDefaults(providers.Purevpn),
 			servers: []models.Server{
 				{QuantumResistant: true, VPN: vpn.OpenVPN, UDP: true},
@@ -225,7 +225,7 @@ func Test_FilterServers(t *testing.T) {
 		},
 		"filter by purevpn p2p server type": {
 			selection: settings.ServerSelection{
-				PureVPNServerType: "p2p",
+				PureVPNServerTypes: []string{"p2p"},
 			}.WithDefaults(providers.Purevpn),
 			servers: []models.Server{
 				{Categories: []string{"standard"}, VPN: vpn.OpenVPN, UDP: true},
@@ -275,19 +275,6 @@ func Test_FilterServers(t *testing.T) {
 				{Country: "b", VPN: vpn.OpenVPN, UDP: true},
 			},
 		},
-		"filter by region": {
-			selection: settings.ServerSelection{
-				Regions: []string{"b"},
-			}.WithDefaults(providers.Surfshark),
-			servers: []models.Server{
-				{Region: "a", VPN: vpn.OpenVPN, UDP: true},
-				{Region: "b", VPN: vpn.OpenVPN, UDP: true},
-				{Region: "c", VPN: vpn.OpenVPN, UDP: true},
-			},
-			filtered: []models.Server{
-				{Region: "b", VPN: vpn.OpenVPN, UDP: true},
-			},
-		},
 		"filter by city": {
 			selection: settings.ServerSelection{
 				Cities: []string{"b"},
@@ -312,6 +299,19 @@ func Test_FilterServers(t *testing.T) {
 			},
 			filtered: []models.Server{
 				{Categories: []string{"legacy_p2p"}, VPN: vpn.OpenVPN, UDP: true},
+			},
+		},
+		"filter by categories match all": {
+			selection: settings.ServerSelection{
+				Categories: []string{"legacy_p2p", "streaming"},
+			}.WithDefaults(providers.Nordvpn),
+			servers: []models.Server{
+				{Categories: []string{"legacy_p2p"}, VPN: vpn.OpenVPN, UDP: true},
+				{Categories: []string{"streaming"}, VPN: vpn.OpenVPN, UDP: true},
+				{Categories: []string{"legacy_p2p", "streaming"}, VPN: vpn.OpenVPN, UDP: true},
+			},
+			filtered: []models.Server{
+				{Categories: []string{"legacy_p2p", "streaming"}, VPN: vpn.OpenVPN, UDP: true},
 			},
 		},
 		"filter by ISP": {

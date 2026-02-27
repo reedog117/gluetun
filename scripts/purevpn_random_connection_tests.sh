@@ -125,7 +125,7 @@ run_attempt() {
     -e OPENVPN_USER="${PUREVPN_USER}" \
     -e OPENVPN_PASSWORD="${PUREVPN_PASSWORD}" \
     -e SERVER_HOSTNAMES="${host}" \
-    -e PUREVPN_SERVER_TYPE="${server_type}" \
+    -e SERVER_TYPES="${server_type}" \
     -e OPENVPN_FLAGS="${openvpn_flags}" \
     ${endpoint_port_env} \
     -e DOT=off \

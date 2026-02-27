@@ -81,7 +81,7 @@ func filterServer(server models.Server,
 		return true
 	}
 
-	if filterByPureVPNServerType(server, selection.PureVPNServerType) {
+	if filterByPureVPNServerTypes(server, selection.PureVPNServerTypes) {
 		return true
 	}
 	if filterByPureVPNLocationCodes(server, selection.PureVPNCountryCodes, selection.PureVPNLocationCodes) {
@@ -100,11 +100,7 @@ func filterServer(server models.Server,
 		return true
 	}
 
-	if filterAnyByPossibilities(server.Categories, selection.Categories) {
-		return true
-	}
-
-	if filterByPossibilities(server.Region, selection.Regions) {
+	if filterAllByPossibilities(server.Categories, selection.Categories) {
 		return true
 	}
 
@@ -133,24 +129,45 @@ func filterServer(server models.Server,
 	return false
 }
 
-func filterByPureVPNServerType(server models.Server, serverType string) (filtered bool) {
+func filterByPureVPNServerTypes(server models.Server, serverTypes []string) (filtered bool) {
 	isP2P := containsCategory(server.Categories, "p2p")
-	switch serverType {
-	case "":
-		return false
-	case "regular":
-		return server.PortForward || server.QuantumResistant || server.Obfuscated || isP2P
-	case "portforwarding":
-		return !server.PortForward
-	case "quantumresistant":
-		return !server.QuantumResistant
-	case "obfuscation":
-		return !server.Obfuscated
-	case "p2p":
-		return !isP2P
-	default:
-		return false
+	if len(serverTypes) == 0 {
+		// By default, avoid obfuscated endpoints unless explicitly requested.
+		return server.Obfuscated
 	}
+
+	allowObfuscated := containsCategory(serverTypes, "obfuscation")
+	if server.Obfuscated && !allowObfuscated {
+		return true
+	}
+
+	for _, serverType := range serverTypes {
+		switch serverType {
+		case "regular":
+			if server.PortForward || server.QuantumResistant || server.Obfuscated || isP2P {
+				return true
+			}
+		case "portforwarding":
+			if !server.PortForward {
+				return true
+			}
+		case "quantumresistant":
+			if !server.QuantumResistant {
+				return true
+			}
+		case "obfuscation":
+			if !server.Obfuscated {
+				return true
+			}
+		case "p2p":
+			if !isP2P {
+				return true
+			}
+		default:
+			return false
+		}
+	}
+	return false
 }
 
 func containsCategory(categories []string, category string) bool {
@@ -209,6 +226,18 @@ func filterByPossibilities[T string | uint16](value T, possibilities []T) (filte
 		}
 	}
 	return true
+}
+
+func filterAllByPossibilities(values, possibilities []string) (filtered bool) {
+	if len(possibilities) == 0 {
+		return false
+	}
+	for _, possibility := range possibilities {
+		if !containsCategory(values, possibility) {
+			return true
+		}
+	}
+	return false
 }
 
 func filterAnyByPossibilities(values, possibilities []string) (filtered bool) {

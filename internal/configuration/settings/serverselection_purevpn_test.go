@@ -8,57 +8,50 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_parsePureVPNServerType(t *testing.T) {
+func Test_parsePureVPNServerTypes(t *testing.T) {
 	t.Parallel()
 
-	testCases := map[string]struct {
-		raw, expected string
-	}{
-		"empty":                   {raw: "", expected: ""},
-		"regular":                 {raw: "regular", expected: "regular"},
-		"pf alias":                {raw: "pf", expected: "portforwarding"},
-		"port forwarding alias":   {raw: "port_forwarding", expected: "portforwarding"},
-		"qr alias":                {raw: "qr", expected: "quantumresistant"},
-		"quantum resistant alias": {raw: "quantum-resistant", expected: "quantumresistant"},
-		"obf alias":               {raw: "obf", expected: "obfuscation"},
-		"obfuscated alias":        {raw: "obfuscated", expected: "obfuscation"},
-		"p2p":                     {raw: "p2p", expected: "p2p"},
-		"unknown":                 {raw: "fast", expected: "fast"},
+	raw := []string{
+		"",
+		"regular",
+		"pf",
+		"port_forwarding",
+		"qr",
+		"quantum-resistant",
+		"obf",
+		"obfuscated",
+		"p2p",
+		"fast",
+		"regular",
 	}
 
-	for name, testCase := range testCases {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			assert.Equal(t, testCase.expected, parsePureVPNServerType(testCase.raw))
-		})
-	}
+	parsed := parsePureVPNServerTypes(raw)
+	assert.Equal(t,
+		[]string{"regular", "portforwarding", "quantumresistant", "obfuscation", "p2p", "fast"},
+		parsed)
 }
 
-func Test_validateFeatureFilters_PureVPNServerType(t *testing.T) {
+func Test_validateFeatureFilters_PureVPNServerTypes(t *testing.T) {
 	t.Parallel()
 
 	testCases := map[string]struct {
-		provider   string
-		serverType string
-		err        error
+		provider    string
+		serverTypes []string
+		err         error
 	}{
 		"valid with purevpn": {
-			provider:   providers.Purevpn,
-			serverType: "obfuscation",
-		},
-		"valid p2p with purevpn": {
-			provider:   providers.Purevpn,
-			serverType: "p2p",
+			provider:    providers.Purevpn,
+			serverTypes: []string{"obfuscation", "p2p"},
 		},
 		"invalid provider": {
-			provider:   providers.Mullvad,
-			serverType: "regular",
-			err:        ErrPureVPNServerTypeNotSupported,
+			provider:    providers.Mullvad,
+			serverTypes: []string{"regular"},
+			err:         ErrPureVPNServerTypeNotSupported,
 		},
 		"invalid value": {
-			provider:   providers.Purevpn,
-			serverType: "fast",
-			err:        ErrPureVPNServerTypeNotValid,
+			provider:    providers.Purevpn,
+			serverTypes: []string{"regular", "fast"},
+			err:         ErrPureVPNServerTypeNotValid,
 		},
 	}
 
@@ -66,7 +59,7 @@ func Test_validateFeatureFilters_PureVPNServerType(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			selection := ServerSelection{PureVPNServerType: testCase.serverType}.WithDefaults(testCase.provider)
+			selection := ServerSelection{PureVPNServerTypes: testCase.serverTypes}.WithDefaults(testCase.provider)
 			err := validateFeatureFilters(selection, testCase.provider)
 
 			if testCase.err == nil {
@@ -147,8 +140,8 @@ func Test_validateFeatureFilters_PureVPNLocationCodeFilters(t *testing.T) {
 func Test_ServerSelection_WithDefaults_PureVPNTypesUseDefaultProtocol(t *testing.T) {
 	t.Parallel()
 
-	for _, serverType := range []string{"regular", "obfuscation", "p2p"} {
-		selection := ServerSelection{PureVPNServerType: serverType}.WithDefaults(providers.Purevpn)
+	for _, serverTypes := range [][]string{{"regular"}, {"obfuscation"}, {"p2p", "quantumresistant"}} {
+		selection := ServerSelection{PureVPNServerTypes: serverTypes}.WithDefaults(providers.Purevpn)
 		assert.Equal(t, "udp", selection.OpenVPN.Protocol)
 	}
 }
