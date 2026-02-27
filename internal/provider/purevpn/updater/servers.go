@@ -35,19 +35,48 @@ func (u *Updater) FetchServers(ctx context.Context, minServers int) (
 		return nil, fmt.Errorf("extracting app.asar from .deb: %w", err)
 	}
 
-	localDataContent, err := extractFileFromAsar(asarContent, localDataAsarPath)
+	endpointsContent, endpointsPath, err := extractFirstFileFromAsar(asarContent,
+		inventoryEndpointsAsarPath,
+		"node_modules/atom-sdk/node_modules/inventory/node_modules/utils/lib/constants/end-points.js")
 	if err != nil {
-		return nil, fmt.Errorf("extracting %q from app.asar: %w", localDataAsarPath, err)
+		return nil, fmt.Errorf("extracting inventory endpoints file from app.asar: %w", err)
 	}
 
-	hts, err := parseLocalData(localDataContent)
+	inventoryURLTemplate, err := parseInventoryURLTemplate(endpointsContent)
 	if err != nil {
-		return nil, fmt.Errorf("parsing %q: %w", localDataAsarPath, err)
-	} else if len(hts) < minServers {
+		return nil, fmt.Errorf("parsing inventory URL template from %q: %w", endpointsPath, err)
+	}
+
+	offlineInventoryContent, offlineInventoryPath, err := extractFirstFileFromAsar(asarContent,
+		inventoryOfflineAsarPath,
+		"node_modules/atom-sdk/node_modules/inventory/src/offline-data/inventory-data.js")
+	if err != nil {
+		return nil, fmt.Errorf("extracting inventory offline data from app.asar: %w", err)
+	}
+
+	resellerUID, err := parseResellerUIDFromInventoryOffline(offlineInventoryContent)
+	if err != nil {
+		return nil, fmt.Errorf("parsing reseller UID from %q: %w", offlineInventoryPath, err)
+	}
+
+	inventoryURL, err := buildInventoryURL(inventoryURLTemplate, resellerUID)
+	if err != nil {
+		return nil, fmt.Errorf("building inventory URL: %w", err)
+	}
+
+	inventoryContent, err := fetchURL(ctx, http.DefaultClient, inventoryURL)
+	if err != nil {
+		return nil, fmt.Errorf("fetching inventory JSON %q: %w", inventoryURL, err)
+	}
+
+	hts, hostToFallbackIPs, err := parseInventoryJSON(inventoryContent)
+	if err != nil {
+		return nil, fmt.Errorf("parsing inventory JSON from %q: %w", inventoryURL, err)
+	}
+	if len(hts) < minServers {
 		return nil, fmt.Errorf("%w: %d and expected at least %d",
 			common.ErrNotEnoughServers, len(hts), minServers)
 	}
-	hostToFallbackIPs := parseLocalDataFallbackIPs(localDataContent)
 
 	hosts := hts.toHostsSlice()
 	resolveSettings := parallelResolverSettings(hosts)
