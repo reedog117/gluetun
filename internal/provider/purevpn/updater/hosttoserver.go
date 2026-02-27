@@ -15,6 +15,10 @@ func (hts hostToServer) add(host string, tcp, udp bool, port uint16) {
 		server.VPN = vpn.OpenVPN
 		server.Hostname = host
 	}
+	portForward, quantumResistant, obfuscated := inferPureVPNTraits(host)
+	server.PortForward = server.PortForward || portForward
+	server.QuantumResistant = server.QuantumResistant || quantumResistant
+	server.Obfuscated = server.Obfuscated || obfuscated
 	if tcp {
 		server.TCP = true
 		if port != 0 {

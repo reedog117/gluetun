@@ -167,6 +167,62 @@ func Test_FilterServers(t *testing.T) {
 				{PortForward: true, VPN: vpn.OpenVPN, UDP: true},
 			},
 		},
+		"filter by purevpn regular server type": {
+			selection: settings.ServerSelection{
+				PureVPNServerType: "regular",
+			}.WithDefaults(providers.Purevpn),
+			servers: []models.Server{
+				{PortForward: true, VPN: vpn.OpenVPN, UDP: true},
+				{QuantumResistant: true, VPN: vpn.OpenVPN, UDP: true},
+				{Obfuscated: true, VPN: vpn.OpenVPN, UDP: true},
+				{VPN: vpn.OpenVPN, UDP: true},
+			},
+			filtered: []models.Server{
+				{VPN: vpn.OpenVPN, UDP: true},
+			},
+		},
+		"filter by purevpn portforwarding server type": {
+			selection: settings.ServerSelection{
+				PureVPNServerType: "portforwarding",
+			}.WithDefaults(providers.Purevpn),
+			servers: []models.Server{
+				{PortForward: false, VPN: vpn.OpenVPN, UDP: true},
+				{PortForward: true, VPN: vpn.OpenVPN, UDP: true},
+				{PortForward: true, QuantumResistant: true, VPN: vpn.OpenVPN, UDP: true},
+			},
+			filtered: []models.Server{
+				{PortForward: true, VPN: vpn.OpenVPN, UDP: true},
+				{PortForward: true, QuantumResistant: true, VPN: vpn.OpenVPN, UDP: true},
+			},
+		},
+		"filter by purevpn quantumresistant server type": {
+			selection: settings.ServerSelection{
+				PureVPNServerType: "quantumresistant",
+			}.WithDefaults(providers.Purevpn),
+			servers: []models.Server{
+				{PortForward: true, VPN: vpn.OpenVPN, UDP: true},
+				{QuantumResistant: true, VPN: vpn.OpenVPN, UDP: true},
+				{PortForward: true, QuantumResistant: true, VPN: vpn.OpenVPN, UDP: true},
+			},
+			filtered: []models.Server{
+				{QuantumResistant: true, VPN: vpn.OpenVPN, UDP: true},
+				{PortForward: true, QuantumResistant: true, VPN: vpn.OpenVPN, UDP: true},
+			},
+		},
+		"filter by purevpn obfuscation server type": {
+			selection: settings.ServerSelection{
+				PureVPNServerType: "obfuscation",
+			}.WithDefaults(providers.Purevpn),
+			servers: []models.Server{
+				{QuantumResistant: true, VPN: vpn.OpenVPN, UDP: true},
+				{Obfuscated: true, VPN: vpn.OpenVPN, UDP: true},
+				{Obfuscated: true, PortForward: true, VPN: vpn.OpenVPN, UDP: true},
+			},
+			filtered: []models.Server{
+				{Obfuscated: true, VPN: vpn.OpenVPN, UDP: true},
+				{Obfuscated: true, PortForward: true, VPN: vpn.OpenVPN, UDP: true},
+			},
+		},
 		"filter by country": {
 			selection: settings.ServerSelection{
 				Countries: []string{"b"},

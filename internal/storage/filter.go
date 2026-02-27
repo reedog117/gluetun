@@ -81,6 +81,10 @@ func filterServer(server models.Server,
 		return true
 	}
 
+	if filterByPureVPNServerType(server, selection.PureVPNServerType) {
+		return true
+	}
+
 	if *selection.SecureCoreOnly && !server.SecureCore {
 		return true
 	}
@@ -124,6 +128,23 @@ func filterServer(server models.Server,
 	// TODO filter port forward server for PIA
 
 	return false
+}
+
+func filterByPureVPNServerType(server models.Server, serverType string) (filtered bool) {
+	switch serverType {
+	case "":
+		return false
+	case "regular":
+		return server.PortForward || server.QuantumResistant || server.Obfuscated
+	case "portforwarding":
+		return !server.PortForward
+	case "quantumresistant":
+		return !server.QuantumResistant
+	case "obfuscation":
+		return !server.Obfuscated
+	default:
+		return false
+	}
 }
 
 func filterByPossibilities[T string | uint16](value T, possibilities []T) (filtered bool) {

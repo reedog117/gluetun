@@ -141,6 +141,10 @@ func noServerFoundError(selection settings.ServerSelection) (err error) {
 		messageParts = append(messageParts, "port forwarding only")
 	}
 
+	if selection.PureVPNServerType != "" {
+		messageParts = append(messageParts, "purevpn server type "+selection.PureVPNServerType)
+	}
+
 	if *selection.SecureCoreOnly {
 		messageParts = append(messageParts, "secure core only")
 	}
