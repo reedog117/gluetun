@@ -23,16 +23,6 @@ func Test_parseInventoryURLTemplate(t *testing.T) {
 		template)
 }
 
-func Test_parseResellerUIDFromInventoryOffline(t *testing.T) {
-	t.Parallel()
-
-	content := []byte(`"use strict";module.exports={body:{reseller:{id:1,Uid:"res_5d4565b42f2c5"}}};`)
-
-	resellerUID, err := parseResellerUIDFromInventoryOffline(content)
-	require.NoError(t, err)
-	assert.Equal(t, "res_5d4565b42f2c5", resellerUID)
-}
-
 func Test_buildInventoryURL(t *testing.T) {
 	t.Parallel()
 
