@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"regexp"
 	"slices"
 	"sort"
@@ -28,7 +27,6 @@ var (
 	cryptoKeyRegex       = regexp.MustCompile(`\bp\s*=\s*"([^"]+)"`)
 	controlCharRegex     = regexp.MustCompile(`[[:cntrl:]]`)
 	configFieldNeedle    = []byte(`"configuration":"`)
-	defaultAtomSecretEnv = "PUREVPN_ATOM_SECRET"
 	defaultAtomSecret    = "MkvGuMCi6nabLqnjATh3HxN1Hh3iZI"
 )
 
@@ -144,11 +142,6 @@ func fetchOpenVPNTemplates(ctx context.Context, httpClient *http.Client,
 }
 
 func resolveAtomSecret(asarContent []byte) (atomSecret string) {
-	atomSecret = strings.TrimSpace(os.Getenv(defaultAtomSecretEnv))
-	if atomSecret != "" {
-		return atomSecret
-	}
-
 	if extracted := parseAtomSecretFromContent(asarContent); extracted != "" {
 		return extracted
 	}
