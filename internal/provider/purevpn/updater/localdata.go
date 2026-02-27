@@ -59,7 +59,7 @@ func parseLocalData(content []byte) (hostToServer, error) {
 			if !ok {
 				continue
 			}
-			hts.add(host, tcp, udp, port)
+			hts.add(host, tcp, udp, port, false)
 		}
 	}
 

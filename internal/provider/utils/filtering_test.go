@@ -223,6 +223,20 @@ func Test_FilterServers(t *testing.T) {
 				{Obfuscated: true, PortForward: true, VPN: vpn.OpenVPN, UDP: true},
 			},
 		},
+		"filter by purevpn p2p server type": {
+			selection: settings.ServerSelection{
+				PureVPNServerType: "p2p",
+			}.WithDefaults(providers.Purevpn),
+			servers: []models.Server{
+				{Categories: []string{"standard"}, VPN: vpn.OpenVPN, UDP: true},
+				{Categories: []string{"p2p"}, VPN: vpn.OpenVPN, UDP: true},
+				{Categories: []string{"p2p", "other"}, VPN: vpn.OpenVPN, UDP: true},
+			},
+			filtered: []models.Server{
+				{Categories: []string{"p2p"}, VPN: vpn.OpenVPN, UDP: true},
+				{Categories: []string{"p2p", "other"}, VPN: vpn.OpenVPN, UDP: true},
+			},
+		},
 		"filter by purevpn country codes": {
 			selection: settings.ServerSelection{
 				PureVPNCountryCodes: []string{"us"},

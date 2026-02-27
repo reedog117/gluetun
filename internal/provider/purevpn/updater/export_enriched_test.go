@@ -5,6 +5,7 @@ package updater
 import (
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -106,4 +107,85 @@ func Test_exportEnrichedServersCSV(t *testing.T) {
 	}
 
 	t.Logf("wrote %d enriched rows to %s", len(servers), outPath)
+
+	username := strings.TrimSpace(firstNonEmpty(
+		os.Getenv("PUREVPN_USER"),
+		os.Getenv("PUREVPN_USERNAME"),
+		os.Getenv("OPENVPN_USER")))
+	password := strings.TrimSpace(firstNonEmpty(
+		os.Getenv("PUREVPN_PASSWORD"),
+		os.Getenv("OPENVPN_PASSWORD")))
+	if username == "" || password == "" {
+		t.Fatalf("PUREVPN credentials are required to export OpenVPN templates")
+	}
+
+	debURL, err := fetchDebURL(ctx, http.DefaultClient)
+	if err != nil {
+		t.Fatalf("fetching deb URL for templates: %v", err)
+	}
+	debContent, err := fetchURL(ctx, http.DefaultClient, debURL)
+	if err != nil {
+		t.Fatalf("fetching deb content for templates: %v", err)
+	}
+	asarContent, err := extractAsarFromDeb(debContent)
+	if err != nil {
+		t.Fatalf("extracting app.asar for templates: %v", err)
+	}
+
+	endpointsContent, endpointsPath, err := extractFirstFileFromAsar(asarContent,
+		inventoryEndpointsAsarPath,
+		"node_modules/atom-sdk/node_modules/inventory/node_modules/utils/lib/constants/end-points.js")
+	if err != nil {
+		t.Fatalf("extracting inventory endpoints file from app.asar: %v", err)
+	}
+	inventoryURLTemplate, err := parseInventoryURLTemplate(endpointsContent)
+	if err != nil {
+		t.Fatalf("parsing inventory URL template from %q: %v", endpointsPath, err)
+	}
+
+	offlineInventoryContent, offlineInventoryPath, err := extractFirstFileFromAsar(asarContent,
+		inventoryOfflineAsarPath,
+		"node_modules/atom-sdk/node_modules/inventory/src/offline-data/inventory-data.js")
+	if err != nil {
+		t.Fatalf("extracting inventory offline data from app.asar: %v", err)
+	}
+	resellerUID, err := parseResellerUIDFromInventoryOffline(offlineInventoryContent)
+	if err != nil {
+		t.Fatalf("parsing reseller UID from %q: %v", offlineInventoryPath, err)
+	}
+	inventoryURL, err := buildInventoryURL(inventoryURLTemplate, resellerUID)
+	if err != nil {
+		t.Fatalf("building inventory URL: %v", err)
+	}
+	inventoryContent, err := fetchURL(ctx, http.DefaultClient, inventoryURL)
+	if err != nil {
+		t.Fatalf("fetching inventory JSON %q: %v", inventoryURL, err)
+	}
+
+	templates, err := fetchOpenVPNTemplates(ctx, http.DefaultClient, asarContent, inventoryContent, username, password)
+	if err != nil {
+		t.Fatalf("fetching OpenVPN templates: %v", err)
+	}
+	if len(templates) == 0 {
+		t.Fatalf("no OpenVPN templates found")
+	}
+
+	const templatesOutPath = "artifacts/purevpn_openvpn_templates.json"
+	templatesData, err := json.MarshalIndent(templates, "", "  ")
+	if err != nil {
+		t.Fatalf("marshalling templates artifact: %v", err)
+	}
+	if err := os.WriteFile(templatesOutPath, append(templatesData, '\n'), 0o600); err != nil {
+		t.Fatalf("writing templates artifact: %v", err)
+	}
+	t.Logf("wrote %d OpenVPN templates to %s", len(templates), templatesOutPath)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }

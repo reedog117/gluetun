@@ -84,6 +84,7 @@ type inventoryBody struct {
 type inventoryCountry struct {
 	DataCenters []inventoryDataCenterRef `json:"data_centers"`
 	Protocols   []inventoryProtocol      `json:"protocols"`
+	Features    []string                 `json:"features"`
 }
 
 type inventoryDataCenterRef struct {
@@ -101,8 +102,10 @@ type inventoryProtocolDNS struct {
 }
 
 type inventoryDNS struct {
-	ID       int    `json:"id"`
-	Hostname string `json:"hostname"`
+	ID                   int      `json:"id"`
+	Hostname             string   `json:"hostname"`
+	ConfigurationVersion string   `json:"configuration_version"`
+	Tags                 []string `json:"tags"`
 }
 
 type inventoryDataCenter struct {
@@ -121,11 +124,13 @@ func parseInventoryJSON(content []byte) (hts hostToServer, hostToFallbackIPs map
 	}
 
 	dnsIDToHostname := make(map[int]string, len(response.Body.DNS))
+	dnsIDToP2PTagged := make(map[int]bool, len(response.Body.DNS))
 	for _, dnsEntry := range response.Body.DNS {
 		if dnsEntry.ID == 0 || dnsEntry.Hostname == "" {
 			continue
 		}
 		dnsIDToHostname[dnsEntry.ID] = strings.TrimSpace(dnsEntry.Hostname)
+		dnsIDToP2PTagged[dnsEntry.ID] = hasP2PTag(dnsEntry.Tags)
 	}
 
 	dataCenterIDToIP := make(map[int]netip.Addr, len(response.Body.DataCenters))
@@ -145,6 +150,7 @@ func parseInventoryJSON(content []byte) (hts hostToServer, hostToFallbackIPs map
 	blocksFound := 0
 
 	for _, country := range response.Body.Countries {
+		countryP2PTagged := hasP2PTag(country.Features)
 		countryDataCenterIPs := make([]netip.Addr, 0, len(country.DataCenters))
 		for _, dataCenterRef := range country.DataCenters {
 			ip, ok := dataCenterIDToIP[dataCenterRef.ID]
@@ -173,7 +179,8 @@ func parseInventoryJSON(content []byte) (hts hostToServer, hostToFallbackIPs map
 				if dns.PortNumber > 0 && dns.PortNumber <= 65535 {
 					port = uint16(dns.PortNumber)
 				}
-				hts.add(hostname, tcp, udp, port)
+				p2pTagged := countryP2PTagged || dnsIDToP2PTagged[dns.DNSID]
+				hts.add(hostname, tcp, udp, port, p2pTagged)
 
 				for _, ip := range countryDataCenterIPs {
 					hostToFallbackIPs[hostname] = appendIPIfMissing(hostToFallbackIPs[hostname], ip)
@@ -190,6 +197,37 @@ func parseInventoryJSON(content []byte) (hts hostToServer, hostToFallbackIPs map
 	}
 
 	return hts, hostToFallbackIPs, nil
+}
+
+func parseInventoryConfigurationVersions(content []byte) (versions []string, err error) {
+	var response inventoryResponse
+	if err := json.Unmarshal(content, &response); err != nil {
+		return nil, fmt.Errorf("unmarshalling inventory JSON: %w", err)
+	}
+
+	set := make(map[string]struct{})
+	for _, dnsEntry := range response.Body.DNS {
+		version := strings.TrimSpace(dnsEntry.ConfigurationVersion)
+		if version == "" {
+			continue
+		}
+		if _, exists := set[version]; exists {
+			continue
+		}
+		set[version] = struct{}{}
+		versions = append(versions, version)
+	}
+
+	return versions, nil
+}
+
+func hasP2PTag(tags []string) (p2p bool) {
+	for _, tag := range tags {
+		if strings.EqualFold(strings.TrimSpace(tag), "p2p") {
+			return true
+		}
+	}
+	return false
 }
 
 func extractFirstFileFromAsar(asarContent []byte, paths ...string) (content []byte, usedPath string, err error) {

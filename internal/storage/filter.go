@@ -134,20 +134,32 @@ func filterServer(server models.Server,
 }
 
 func filterByPureVPNServerType(server models.Server, serverType string) (filtered bool) {
+	isP2P := containsCategory(server.Categories, "p2p")
 	switch serverType {
 	case "":
 		return false
 	case "regular":
-		return server.PortForward || server.QuantumResistant || server.Obfuscated
+		return server.PortForward || server.QuantumResistant || server.Obfuscated || isP2P
 	case "portforwarding":
 		return !server.PortForward
 	case "quantumresistant":
 		return !server.QuantumResistant
 	case "obfuscation":
 		return !server.Obfuscated
+	case "p2p":
+		return !isP2P
 	default:
 		return false
 	}
+}
+
+func containsCategory(categories []string, category string) bool {
+	for _, existingCategory := range categories {
+		if strings.EqualFold(existingCategory, category) {
+			return true
+		}
+	}
+	return false
 }
 
 func filterByPureVPNLocationCodes(server models.Server,

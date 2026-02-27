@@ -58,7 +58,7 @@ type ServerSelection struct {
 	// and ProtonVPN.
 	PortForwardOnly *bool `json:"port_forward_only"`
 	// PureVPNServerType selects PureVPN servers by hostname-inferred traits.
-	// Allowed values are: regular, portforwarding, quantumresistant, obfuscation.
+	// Allowed values are: regular, portforwarding, quantumresistant, obfuscation, p2p.
 	PureVPNServerType string `json:"purevpn_server_type"`
 	// PureVPNCountryCodes filters PureVPN servers by deterministic
 	// 2-letter country code parsed from the hostname prefix.
@@ -299,7 +299,7 @@ func validateFeatureFilters(settings ServerSelection, vpnServiceProvider string)
 		return fmt.Errorf("%w", ErrPureVPNServerTypeNotSupported)
 	case settings.PureVPNServerType != "" &&
 		!helpers.IsOneOf(settings.PureVPNServerType,
-			"regular", "portforwarding", "quantumresistant", "obfuscation"):
+			"regular", "portforwarding", "quantumresistant", "obfuscation", "p2p"):
 		return fmt.Errorf("%w: %q", ErrPureVPNServerTypeNotValid, settings.PureVPNServerType)
 	case len(settings.PureVPNCountryCodes) > 0 && vpnServiceProvider != providers.Purevpn:
 		return fmt.Errorf("%w", ErrPureVPNCountryCodesNotSupported)
@@ -611,6 +611,8 @@ func parsePureVPNServerType(raw string) string {
 		return "quantumresistant"
 	case "obfuscation", "obfuscated", "obf":
 		return "obfuscation"
+	case "p2p":
+		return "p2p"
 	default:
 		return value
 	}

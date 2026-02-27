@@ -22,6 +22,7 @@ func Test_parsePureVPNServerType(t *testing.T) {
 		"quantum resistant alias": {raw: "quantum-resistant", expected: "quantumresistant"},
 		"obf alias":               {raw: "obf", expected: "obfuscation"},
 		"obfuscated alias":        {raw: "obfuscated", expected: "obfuscation"},
+		"p2p":                     {raw: "p2p", expected: "p2p"},
 		"unknown":                 {raw: "fast", expected: "fast"},
 	}
 
@@ -44,6 +45,10 @@ func Test_validateFeatureFilters_PureVPNServerType(t *testing.T) {
 		"valid with purevpn": {
 			provider:   providers.Purevpn,
 			serverType: "obfuscation",
+		},
+		"valid p2p with purevpn": {
+			provider:   providers.Purevpn,
+			serverType: "p2p",
 		},
 		"invalid provider": {
 			provider:   providers.Mullvad,
@@ -136,5 +141,14 @@ func Test_validateFeatureFilters_PureVPNLocationCodeFilters(t *testing.T) {
 			require.Error(t, err)
 			assert.ErrorIs(t, err, testCase.err)
 		})
+	}
+}
+
+func Test_ServerSelection_WithDefaults_PureVPNTypesUseDefaultProtocol(t *testing.T) {
+	t.Parallel()
+
+	for _, serverType := range []string{"regular", "obfuscation", "p2p"} {
+		selection := ServerSelection{PureVPNServerType: serverType}.WithDefaults(providers.Purevpn)
+		assert.Equal(t, "udp", selection.OpenVPN.Protocol)
 	}
 }

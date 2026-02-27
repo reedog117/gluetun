@@ -12,6 +12,7 @@ func Test_inferPureVPNTraits(t *testing.T) {
 	testCases := map[string]struct {
 		hostname                    string
 		portForward, qr, obfuscated bool
+		p2p                         bool
 	}{
 		"regular": {
 			hostname: "us2-udp.ptoserver.com",
@@ -33,17 +34,22 @@ func Test_inferPureVPNTraits(t *testing.T) {
 			portForward: true,
 			qr:          true,
 		},
+		"p2p": {
+			hostname: "fi-p2p.jumptoserver.com",
+			p2p:      true,
+		},
 	}
 
 	for name, testCase := range testCases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			portForward, qr, obfuscated := inferPureVPNTraits(testCase.hostname)
+			portForward, qr, obfuscated, p2p := inferPureVPNTraits(testCase.hostname)
 
 			assert.Equal(t, testCase.portForward, portForward)
 			assert.Equal(t, testCase.qr, qr)
 			assert.Equal(t, testCase.obfuscated, obfuscated)
+			assert.Equal(t, testCase.p2p, p2p)
 		})
 	}
 }
