@@ -60,6 +60,12 @@ type ServerSelection struct {
 	// PureVPNServerType selects PureVPN servers by hostname-inferred traits.
 	// Allowed values are: regular, portforwarding, quantumresistant, obfuscation.
 	PureVPNServerType string `json:"purevpn_server_type"`
+	// PureVPNCountryCodes filters PureVPN servers by deterministic
+	// 2-letter country code parsed from the hostname prefix.
+	PureVPNCountryCodes []string `json:"purevpn_country_codes"`
+	// PureVPNLocationCodes filters PureVPN servers by deterministic
+	// location code parsed from the hostname prefix (for example usca, ukm).
+	PureVPNLocationCodes []string `json:"purevpn_location_codes"`
 	// SecureCoreOnly is true if VPN servers without secure core should
 	// be filtered. This is used with ProtonVPN.
 	SecureCoreOnly *bool `json:"secure_core_only"`
@@ -75,17 +81,21 @@ type ServerSelection struct {
 }
 
 var (
-	ErrOwnedOnlyNotSupported         = errors.New("owned only filter is not supported")
-	ErrFreeOnlyNotSupported          = errors.New("free only filter is not supported")
-	ErrPremiumOnlyNotSupported       = errors.New("premium only filter is not supported")
-	ErrStreamOnlyNotSupported        = errors.New("stream only filter is not supported")
-	ErrMultiHopOnlyNotSupported      = errors.New("multi hop only filter is not supported")
-	ErrPortForwardOnlyNotSupported   = errors.New("port forwarding only filter is not supported")
-	ErrPureVPNServerTypeNotSupported = errors.New("purevpn server type filter is not supported")
-	ErrPureVPNServerTypeNotValid     = errors.New("purevpn server type is not valid")
-	ErrFreePremiumBothSet            = errors.New("free only and premium only filters are both set")
-	ErrSecureCoreOnlyNotSupported    = errors.New("secure core only filter is not supported")
-	ErrTorOnlyNotSupported           = errors.New("tor only filter is not supported")
+	ErrOwnedOnlyNotSupported            = errors.New("owned only filter is not supported")
+	ErrFreeOnlyNotSupported             = errors.New("free only filter is not supported")
+	ErrPremiumOnlyNotSupported          = errors.New("premium only filter is not supported")
+	ErrStreamOnlyNotSupported           = errors.New("stream only filter is not supported")
+	ErrMultiHopOnlyNotSupported         = errors.New("multi hop only filter is not supported")
+	ErrPortForwardOnlyNotSupported      = errors.New("port forwarding only filter is not supported")
+	ErrPureVPNServerTypeNotSupported    = errors.New("purevpn server type filter is not supported")
+	ErrPureVPNServerTypeNotValid        = errors.New("purevpn server type is not valid")
+	ErrPureVPNCountryCodesNotSupported  = errors.New("purevpn country codes filter is not supported")
+	ErrPureVPNCountryCodeNotValid       = errors.New("purevpn country code is not valid")
+	ErrPureVPNLocationCodesNotSupported = errors.New("purevpn location codes filter is not supported")
+	ErrPureVPNLocationCodeNotValid      = errors.New("purevpn location code is not valid")
+	ErrFreePremiumBothSet               = errors.New("free only and premium only filters are both set")
+	ErrSecureCoreOnlyNotSupported       = errors.New("secure core only filter is not supported")
+	ErrTorOnlyNotSupported              = errors.New("tor only filter is not supported")
 )
 
 func (ss *ServerSelection) validate(vpnServiceProvider string,
@@ -291,37 +301,63 @@ func validateFeatureFilters(settings ServerSelection, vpnServiceProvider string)
 		!helpers.IsOneOf(settings.PureVPNServerType,
 			"regular", "portforwarding", "quantumresistant", "obfuscation"):
 		return fmt.Errorf("%w: %q", ErrPureVPNServerTypeNotValid, settings.PureVPNServerType)
+	case len(settings.PureVPNCountryCodes) > 0 && vpnServiceProvider != providers.Purevpn:
+		return fmt.Errorf("%w", ErrPureVPNCountryCodesNotSupported)
+	case len(settings.PureVPNLocationCodes) > 0 && vpnServiceProvider != providers.Purevpn:
+		return fmt.Errorf("%w", ErrPureVPNLocationCodesNotSupported)
 	case *settings.SecureCoreOnly && vpnServiceProvider != providers.Protonvpn:
 		return fmt.Errorf("%w", ErrSecureCoreOnlyNotSupported)
 	case *settings.TorOnly && vpnServiceProvider != providers.Protonvpn:
 		return fmt.Errorf("%w", ErrTorOnlyNotSupported)
 	default:
+		for _, code := range settings.PureVPNCountryCodes {
+			if len(code) != 2 || !isASCIIAlpha(code) {
+				return fmt.Errorf("%w: %q", ErrPureVPNCountryCodeNotValid, code)
+			}
+		}
+		for _, code := range settings.PureVPNLocationCodes {
+			if len(code) < 2 || len(code) > 5 || !isASCIIAlpha(code) {
+				return fmt.Errorf("%w: %q", ErrPureVPNLocationCodeNotValid, code)
+			}
+		}
 		return nil
 	}
 }
 
+func isASCIIAlpha(s string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') {
+			return false
+		}
+	}
+	return true
+}
+
 func (ss *ServerSelection) copy() (copied ServerSelection) {
 	return ServerSelection{
-		VPN:               ss.VPN,
-		Countries:         gosettings.CopySlice(ss.Countries),
-		Categories:        gosettings.CopySlice(ss.Categories),
-		Regions:           gosettings.CopySlice(ss.Regions),
-		Cities:            gosettings.CopySlice(ss.Cities),
-		ISPs:              gosettings.CopySlice(ss.ISPs),
-		Hostnames:         gosettings.CopySlice(ss.Hostnames),
-		Names:             gosettings.CopySlice(ss.Names),
-		Numbers:           gosettings.CopySlice(ss.Numbers),
-		OwnedOnly:         gosettings.CopyPointer(ss.OwnedOnly),
-		FreeOnly:          gosettings.CopyPointer(ss.FreeOnly),
-		PremiumOnly:       gosettings.CopyPointer(ss.PremiumOnly),
-		StreamOnly:        gosettings.CopyPointer(ss.StreamOnly),
-		SecureCoreOnly:    gosettings.CopyPointer(ss.SecureCoreOnly),
-		TorOnly:           gosettings.CopyPointer(ss.TorOnly),
-		PortForwardOnly:   gosettings.CopyPointer(ss.PortForwardOnly),
-		PureVPNServerType: ss.PureVPNServerType,
-		MultiHopOnly:      gosettings.CopyPointer(ss.MultiHopOnly),
-		OpenVPN:           ss.OpenVPN.copy(),
-		Wireguard:         ss.Wireguard.copy(),
+		VPN:                  ss.VPN,
+		Countries:            gosettings.CopySlice(ss.Countries),
+		Categories:           gosettings.CopySlice(ss.Categories),
+		Regions:              gosettings.CopySlice(ss.Regions),
+		Cities:               gosettings.CopySlice(ss.Cities),
+		ISPs:                 gosettings.CopySlice(ss.ISPs),
+		Hostnames:            gosettings.CopySlice(ss.Hostnames),
+		Names:                gosettings.CopySlice(ss.Names),
+		Numbers:              gosettings.CopySlice(ss.Numbers),
+		OwnedOnly:            gosettings.CopyPointer(ss.OwnedOnly),
+		FreeOnly:             gosettings.CopyPointer(ss.FreeOnly),
+		PremiumOnly:          gosettings.CopyPointer(ss.PremiumOnly),
+		StreamOnly:           gosettings.CopyPointer(ss.StreamOnly),
+		SecureCoreOnly:       gosettings.CopyPointer(ss.SecureCoreOnly),
+		TorOnly:              gosettings.CopyPointer(ss.TorOnly),
+		PortForwardOnly:      gosettings.CopyPointer(ss.PortForwardOnly),
+		PureVPNServerType:    ss.PureVPNServerType,
+		PureVPNCountryCodes:  gosettings.CopySlice(ss.PureVPNCountryCodes),
+		PureVPNLocationCodes: gosettings.CopySlice(ss.PureVPNLocationCodes),
+		MultiHopOnly:         gosettings.CopyPointer(ss.MultiHopOnly),
+		OpenVPN:              ss.OpenVPN.copy(),
+		Wireguard:            ss.Wireguard.copy(),
 	}
 }
 
@@ -344,6 +380,8 @@ func (ss *ServerSelection) overrideWith(other ServerSelection) {
 	ss.MultiHopOnly = gosettings.OverrideWithPointer(ss.MultiHopOnly, other.MultiHopOnly)
 	ss.PortForwardOnly = gosettings.OverrideWithPointer(ss.PortForwardOnly, other.PortForwardOnly)
 	ss.PureVPNServerType = gosettings.OverrideWithComparable(ss.PureVPNServerType, other.PureVPNServerType)
+	ss.PureVPNCountryCodes = gosettings.OverrideWithSlice(ss.PureVPNCountryCodes, other.PureVPNCountryCodes)
+	ss.PureVPNLocationCodes = gosettings.OverrideWithSlice(ss.PureVPNLocationCodes, other.PureVPNLocationCodes)
 	ss.OpenVPN.overrideWith(other.OpenVPN)
 	ss.Wireguard.overrideWith(other.Wireguard)
 }
@@ -361,6 +399,8 @@ func (ss *ServerSelection) setDefaults(vpnProvider string, portForwardingEnabled
 		helpers.IsOneOf(vpnProvider, providers.PrivateInternetAccess, providers.Protonvpn)
 	ss.PortForwardOnly = gosettings.DefaultPointer(ss.PortForwardOnly, defaultPortForwardOnly)
 	ss.PureVPNServerType = gosettings.DefaultComparable(ss.PureVPNServerType, "")
+	ss.PureVPNCountryCodes = gosettings.DefaultSlice(ss.PureVPNCountryCodes, nil)
+	ss.PureVPNLocationCodes = gosettings.DefaultSlice(ss.PureVPNLocationCodes, nil)
 	ss.OpenVPN.setDefaults(vpnProvider)
 	ss.Wireguard.setDefaults()
 }
@@ -442,6 +482,12 @@ func (ss ServerSelection) toLinesNode() (node *gotree.Node) {
 
 	if ss.PureVPNServerType != "" {
 		node.Appendf("PureVPN server type: %s", ss.PureVPNServerType)
+	}
+	if len(ss.PureVPNCountryCodes) > 0 {
+		node.Appendf("PureVPN country codes: %s", strings.Join(ss.PureVPNCountryCodes, ", "))
+	}
+	if len(ss.PureVPNLocationCodes) > 0 {
+		node.Appendf("PureVPN location codes: %s", strings.Join(ss.PureVPNLocationCodes, ", "))
 	}
 
 	if ss.VPN == vpn.OpenVPN {
@@ -532,6 +578,8 @@ func (ss *ServerSelection) read(r *reader.Reader,
 	}
 
 	ss.PureVPNServerType = parsePureVPNServerType(r.String("PUREVPN_SERVER_TYPE"))
+	ss.PureVPNCountryCodes = normalizePureVPNCodes(r.CSV("PUREVPN_COUNTRY_CODES"))
+	ss.PureVPNLocationCodes = normalizePureVPNCodes(r.CSV("PUREVPN_LOCATION_CODES"))
 
 	err = ss.OpenVPN.read(r)
 	if err != nil {
@@ -566,4 +614,20 @@ func parsePureVPNServerType(raw string) string {
 	default:
 		return value
 	}
+}
+
+func normalizePureVPNCodes(rawCodes []string) (codes []string) {
+	set := make(map[string]struct{}, len(rawCodes))
+	for _, raw := range rawCodes {
+		code := strings.TrimSpace(strings.ToLower(raw))
+		if code == "" {
+			continue
+		}
+		if _, ok := set[code]; ok {
+			continue
+		}
+		set[code] = struct{}{}
+		codes = append(codes, code)
+	}
+	return codes
 }

@@ -74,3 +74,67 @@ func Test_validateFeatureFilters_PureVPNServerType(t *testing.T) {
 		})
 	}
 }
+
+func Test_normalizePureVPNCodes(t *testing.T) {
+	t.Parallel()
+
+	codes := normalizePureVPNCodes([]string{" US ", "us", "de", "", "DE"})
+	assert.Equal(t, []string{"us", "de"}, codes)
+}
+
+func Test_validateFeatureFilters_PureVPNLocationCodeFilters(t *testing.T) {
+	t.Parallel()
+
+	testCases := map[string]struct {
+		provider      string
+		countryCodes  []string
+		locationCodes []string
+		err           error
+	}{
+		"valid country and location codes with purevpn": {
+			provider:      providers.Purevpn,
+			countryCodes:  []string{"us", "de"},
+			locationCodes: []string{"usca", "ukm"},
+		},
+		"country codes not supported on other providers": {
+			provider:     providers.Mullvad,
+			countryCodes: []string{"us"},
+			err:          ErrPureVPNCountryCodesNotSupported,
+		},
+		"location codes not supported on other providers": {
+			provider:      providers.Mullvad,
+			locationCodes: []string{"usca"},
+			err:           ErrPureVPNLocationCodesNotSupported,
+		},
+		"invalid country code": {
+			provider:     providers.Purevpn,
+			countryCodes: []string{"usa"},
+			err:          ErrPureVPNCountryCodeNotValid,
+		},
+		"invalid location code": {
+			provider:      providers.Purevpn,
+			locationCodes: []string{"us1"},
+			err:           ErrPureVPNLocationCodeNotValid,
+		},
+	}
+
+	for name, testCase := range testCases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			selection := ServerSelection{
+				PureVPNCountryCodes:  testCase.countryCodes,
+				PureVPNLocationCodes: testCase.locationCodes,
+			}.WithDefaults(testCase.provider)
+			err := validateFeatureFilters(selection, testCase.provider)
+
+			if testCase.err == nil {
+				require.NoError(t, err)
+				return
+			}
+
+			require.Error(t, err)
+			assert.ErrorIs(t, err, testCase.err)
+		})
+	}
+}

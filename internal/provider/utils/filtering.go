@@ -62,6 +62,9 @@ func filterServer(server models.Server,
 	if filterByPureVPNServerType(server, selection.PureVPNServerType) {
 		return true
 	}
+	if filterByPureVPNLocationCodes(server, selection.PureVPNCountryCodes, selection.PureVPNLocationCodes) {
+		return true
+	}
 
 	if *selection.SecureCoreOnly && !server.SecureCore {
 		return true
@@ -123,6 +126,43 @@ func filterByPureVPNServerType(server models.Server, serverType string) (filtere
 	default:
 		return false
 	}
+}
+
+func filterByPureVPNLocationCodes(server models.Server,
+	countryCodes, locationCodes []string,
+) (filtered bool) {
+	if len(countryCodes) == 0 && len(locationCodes) == 0 {
+		return false
+	}
+
+	countryCode, locationCode := parsePureVPNLocationCodes(server.Hostname)
+	if len(countryCodes) > 0 && filterByPossibilities(countryCode, countryCodes) {
+		return true
+	}
+	if len(locationCodes) > 0 && filterByPossibilities(locationCode, locationCodes) {
+		return true
+	}
+	return false
+}
+
+func parsePureVPNLocationCodes(hostname string) (countryCode, locationCode string) {
+	firstLabel := hostname
+	if dotIndex := strings.IndexByte(hostname, '.'); dotIndex > -1 {
+		firstLabel = hostname[:dotIndex]
+	}
+
+	twoMinusIndex := strings.Index(firstLabel, "2-")
+	if twoMinusIndex <= 0 {
+		return "", ""
+	}
+
+	locationCode = strings.ToLower(firstLabel[:twoMinusIndex])
+	if len(locationCode) < 2 {
+		return "", ""
+	}
+
+	countryCode = locationCode[:2]
+	return countryCode, locationCode
 }
 
 func filterByPossibilities[T string | uint16](value T, possibilities []T) (filtered bool) {

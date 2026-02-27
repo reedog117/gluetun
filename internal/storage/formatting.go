@@ -144,6 +144,12 @@ func noServerFoundError(selection settings.ServerSelection) (err error) {
 	if selection.PureVPNServerType != "" {
 		messageParts = append(messageParts, "purevpn server type "+selection.PureVPNServerType)
 	}
+	if len(selection.PureVPNCountryCodes) > 0 {
+		messageParts = append(messageParts, "purevpn country codes "+commaJoin(selection.PureVPNCountryCodes))
+	}
+	if len(selection.PureVPNLocationCodes) > 0 {
+		messageParts = append(messageParts, "purevpn location codes "+commaJoin(selection.PureVPNLocationCodes))
+	}
 
 	if *selection.SecureCoreOnly {
 		messageParts = append(messageParts, "secure core only")

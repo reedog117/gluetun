@@ -223,6 +223,31 @@ func Test_FilterServers(t *testing.T) {
 				{Obfuscated: true, PortForward: true, VPN: vpn.OpenVPN, UDP: true},
 			},
 		},
+		"filter by purevpn country codes": {
+			selection: settings.ServerSelection{
+				PureVPNCountryCodes: []string{"us"},
+			}.WithDefaults(providers.Purevpn),
+			servers: []models.Server{
+				{Hostname: "usca2-auto-udp.ptoserver.com", VPN: vpn.OpenVPN, UDP: true},
+				{Hostname: "de2-auto-udp.ptoserver.com", VPN: vpn.OpenVPN, UDP: true},
+			},
+			filtered: []models.Server{
+				{Hostname: "usca2-auto-udp.ptoserver.com", VPN: vpn.OpenVPN, UDP: true},
+			},
+		},
+		"filter by purevpn location codes": {
+			selection: settings.ServerSelection{
+				PureVPNLocationCodes: []string{"usca"},
+			}.WithDefaults(providers.Purevpn),
+			servers: []models.Server{
+				{Hostname: "usca2-auto-udp.ptoserver.com", VPN: vpn.OpenVPN, UDP: true},
+				{Hostname: "usny2-auto-udp.ptoserver.com", VPN: vpn.OpenVPN, UDP: true},
+				{Hostname: "de2-auto-udp.ptoserver.com", VPN: vpn.OpenVPN, UDP: true},
+			},
+			filtered: []models.Server{
+				{Hostname: "usca2-auto-udp.ptoserver.com", VPN: vpn.OpenVPN, UDP: true},
+			},
+		},
 		"filter by country": {
 			selection: settings.ServerSelection{
 				Countries: []string{"b"},
